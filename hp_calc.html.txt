@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>怪物血量动态计算器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 15px; background: #fafafa; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .title { color: #333; margin-bottom: 20px; font-weight: bold; }
+        .display-box { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-family: monospace; }
+        .hp-text { font-size: 1.5em; color: #ff5252; }
+        input[type=range] { width: 100%; margin: 15px 0; cursor: pointer; }
+        canvas { max-height: 250px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="title">🩸 怪物血量 (HP) 实时模拟</div>
+    
+    <div class="display-box">
+        等级 (L): <span id="levelVal">0</span><br>
+        血量 (HP): <span id="hpVal" class="hp-text">3703</span>
+    </div>
+
+    <input type="range" id="levelSlider" min="0" max="300" value="0" step="1">
+
+    <canvas id="hpChart"></canvas>
+</div>
+
+<script>
+    const ctx = document.getElementById('hpChart').getContext('2d');
+    const levelSlider = document.getElementById('levelSlider');
+    const levelVal = document.getElementById('levelVal');
+    const hpVal = document.getElementById('hpVal');
+
+    // --- 核心公式逻辑 ---
+    function calculateHP(L) {
+        L = parseFloat(L);
+        if (L <= 100) {
+            return 3703 + 24.57 * L;
+        } else if (L <= 200) {
+            return 6160 + 262.68 * (L - 100);
+        } else {
+            return 32428 + 383.48 * (L - 200);
+        }
+    }
+
+    // 生成背景曲线的数据（0到300级，每隔5级取一个点）
+    const labels = [];
+    const curveData = [];
+    for (let i = 0; i <= 300; i += 5) {
+        labels.push(i);
+        curveData.push(calculateHP(i));
+    }
+
+    // 初始化图表
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '当前位置',
+                    data: [{x: 0, y: 3703}], // 初始点
+                    backgroundColor: '#ff5252',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    showLine: false,
+                    zIndex: 10
+                },
+                {
+                    label: 'HP 趋势',
+                    data: curveData,
+                    borderColor: '#ccc',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { type: 'linear', min: 0, max: 300, title: {display: true, text: '血月等级'} },
+                y: { title: {display: true, text: 'HP'} }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // 监听滑动条变化
+    levelSlider.addEventListener('input', function() {
+        const L = this.value;
+        const HP = calculateHP(L);
+        
+        // 更新文字
+        levelVal.innerText = L;
+        hpVal.innerText = Math.round(HP).toLocaleString();
+
+        // 更新图表上的红点
+        chart.data.datasets[0].data = [{ x: parseFloat(L), y: HP }];
+        chart.update('none'); // 'none' 表示不需要动画，追求实时感
+    });
+</script>
+
+</body>
+</html>
