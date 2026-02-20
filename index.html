@@ -1,165 +1,201 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>数值膨胀与生存预测</title>
+    <title>血月数值精准拟合模拟器</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --primary: #00e5ff; --danger: #ff5252; --bg: #121212; --card: #1e1e1e; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: #fff; padding: 20px; margin: 0; }
-        .container { max-width: 950px; margin: 0 auto; background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .grid { display: grid; grid-template-columns: 350px 1fr; gap: 25px; }
-        .panel { background: #252525; padding: 20px; border-radius: 12px; }
-        .stat-card { background: #000; padding: 15px; border-radius: 8px; border-left: 4px solid var(--primary); margin-bottom: 10px; }
-        input[type=range] { width: 100%; margin: 10px 0; accent-color: var(--primary); }
-        .value { float: right; color: var(--primary); font-family: monospace; font-weight: bold; }
-        .status-badge { display: block; padding: 10px; text-align: center; border-radius: 6px; font-weight: bold; margin-top: 15px; }
-        .safe { background: #1b4332; color: #74c69d; border: 1px solid #2d6a4f; }
-        .death { background: #431b1b; color: #ff8787; border: 1px solid #6a2d2d; }
-        canvas { margin-top: 20px; max-height: 300px; }
+        :root { --cyan: #00e5ff; --orange: #ff9f43; --bg: #121212; --card: #1e1e1e; }
+        body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; background: var(--bg); color: #e0e0e0; padding: 20px; line-height: 1.5; }
+        .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+        .panel { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #333; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+        h3 { margin-top: 0; color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; font-size: 1.1em; }
+        
+        /* 控制区样式 */
+        .control-group { margin-bottom: 20px; }
+        label { display: block; font-size: 0.85em; color: #888; margin-bottom: 8px; }
+        input[type=range] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
+        .val-display { float: right; color: var(--cyan); font-family: monospace; font-weight: bold; }
+        
+        /* 词缀槽位 */
+        .slot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .slot { background: #121212; border: 1px solid #444; padding: 5px; border-radius: 6px; display: flex; align-items: center; }
+        .slot span { font-size: 0.7em; color: #666; width: 25px; }
+        .slot input { background: transparent; border: none; color: var(--cyan); width: 100%; outline: none; font-size: 0.9em; font-weight: bold; }
+
+        /* 结果显示 */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #000; padding: 15px; border-radius: 12px; border-left: 4px solid var(--cyan); }
+        .stat-card.crit { border-left-color: var(--orange); }
+        .stat-label { font-size: 0.75em; color: #888; text-transform: uppercase; }
+        .stat-value { font-size: 1.8em; font-weight: bold; font-family: "Courier New", monospace; }
+
+        .status-box { padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.9em; }
+        .pass { background: rgba(76, 175, 80, 0.1); color: #4caf50; border: 1px solid #4caf50; }
+        .fail { background: rgba(244, 67, 54, 0.1); color: #f44336; border: 1px solid #f44336; }
+
+        canvas { background: #121212; border-radius: 8px; padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2 style="margin:0;">⚔️ 数值膨胀模拟器 <small style="font-size:0.5em; color:#888;">(累加模型)</small></h2>
-        <div id="statusBadge" class="status-badge death">计算中...</div>
-    </div>
+    <div class="panel">
+        <h3>⚙️ 养成参数</h3>
+        
+        <div class="control-group">
+            <label>局外初始 ($ATK_{out}$) <span id="outVal" class="val-display">42</span></label>
+            <input type="range" id="outSlider" min="20" max="100" value="42">
+        </div>
 
-    <div class="grid">
-        <div class="panel">
-            <label>血月等级 (L): <span id="lVal" class="value">0</span></label>
+        <div class="control-group">
+            <label>血月等级 (L) <span id="lVal" class="val-display">0</span></label>
             <input type="range" id="lSlider" min="0" max="300" value="0">
-
-            <label>怪物数量 (N): <span id="nVal" class="value">1</span></label>
-            <input type="range" id="nSlider" min="1" max="50" value="1">
-
-            <label>词缀增伤累计: <span id="bVal" class="value">0%</span></label>
-            <input type="range" id="bSlider" min="0" max="800" value="0" step="10">
-
-            <div style="margin-top:20px; font-size:0.85em; color:#aaa;">
-                <div style="margin-bottom:5px;">固定常数：</div>
-                • 局外基础伤害: 30<br>
-                • 局内初始伤害: 122<br>
-                • 玩家血量: 100 | 怪物攻击: 30
-            </div>
         </div>
 
-        <div class="panel">
-            <div class="stat-card">
-                <div style="font-size:0.8em; color:#888;">局内攻击力 (ATK_in)</div>
-                <div id="atkIn" style="font-size:1.4em;">122</div>
+        <div class="control-group">
+            <label>怪物数量 (N) <span id="nVal" class="val-display">1</span></label>
+            <input type="range" id="nSlider" min="1" max="50" value="1">
+        </div>
+
+        <label>局内增伤词缀列表 (%)</label>
+        <div class="slot-grid" id="slotGrid">
             </div>
-            <div class="stat-card" style="border-left-color: #ff9f43;">
-                <div style="font-size:0.8em; color:#888;">暴击伤害 (Crit_Dmg)</div>
-                <div id="critDmg" style="font-size:1.4em;">214</div>
-            </div>
-            <div class="stat-card" style="border-left-color: #ee5253;">
-                <div style="font-size:0.8em; color:#888;">生存倒计时 (T_die)</div>
-                <div id="tDie" style="font-size:1.4em;">3.33s</div>
-            </div>
-            
-            <div style="padding:10px; font-size:0.9em; color:#888;">
-                建议清场总输出需达到: <span id="reqDmg" style="color:#fff;">0</span>
-            </div>
+        
+        <div style="margin-top: 15px; font-size: 0.75em; color: #555;">
+            * 公式拟合自图片：<br>
+            ATK_in = ATK_out + (122 - ATK_out) * (1 + ΣBonus)<br>
+            Crit = 2 * ATK_in - ATK_out
         </div>
     </div>
 
-    <canvas id="mainChart"></canvas>
+    <div class="panel">
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-label">局内总攻击力</div>
+                <div id="atkInRes" class="stat-value">122</div>
+            </div>
+            <div class="stat-card crit">
+                <div class="stat-label">暴击伤害</div>
+                <div id="critRes" class="stat-value">202</div>
+            </div>
+        </div>
+
+        <div id="statusBox" class="status-box fail">火力评估中...</div>
+
+        <div style="margin-top: 20px;">
+            <canvas id="growthChart" height="200"></canvas>
+        </div>
+    </div>
 </div>
 
 <script>
+    const outS = document.getElementById('outSlider');
     const lS = document.getElementById('lSlider');
     const nS = document.getElementById('nSlider');
-    const bS = document.getElementById('bSlider');
-    const ctx = document.getElementById('mainChart').getContext('2d');
+    const slotGrid = document.getElementById('slotGrid');
+    const ctx = document.getElementById('growthChart').getContext('2d');
 
-    function getHP(L) {
+    // 预设词缀数据（对应你的例子：40, 80, 40, 80...）
+    const presetBonuses = [40, 80, 40, 80, 0, 0, 0, 0, 0, 0];
+
+    // 初始化槽位
+    presetBonuses.forEach((val, i) => {
+        const div = document.createElement('div');
+        div.className = 'slot';
+        div.innerHTML = `<span>#${i+1}</span><input type="number" class="slot-input" value="${val}" step="10">`;
+        slotGrid.appendChild(div);
+    });
+
+    // 怪物血量公式
+    function getMonsterHP(L) {
         if (L <= 100) return 3703 + 24.57 * L;
         if (L <= 200) return 6160 + 262.68 * (L - 100);
         return 32428 + 383.48 * (L - 200);
     }
 
+    // 初始化图表
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: Array.from({length: 31}, (_, i) => i * 10),
+            labels: ['起步', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
             datasets: [{
-                label: '所需清场攻击力',
-                data: [],
-                borderColor: '#444',
-                borderWidth: 1,
-                pointRadius: 0,
-                fill: false
-            }, {
-                label: '你的攻击力',
+                label: '攻击力成长',
                 data: [],
                 borderColor: '#00e5ff',
-                backgroundColor: 'rgba(0, 229, 255, 0.2)',
+                backgroundColor: 'rgba(0, 229, 255, 0.1)',
                 fill: true,
-                pointRadius: 0
+                tension: 0.1,
+                pointRadius: 4
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             scales: {
-                y: { type: 'logarithmic', grid: { color: '#333' } },
-                x: { grid: { display: false } }
+                y: { grid: { color: '#222' }, ticks: { color: '#555' } },
+                x: { grid: { display: false }, ticks: { color: '#555' } }
             },
             plugins: { legend: { display: false } }
         }
     });
 
-    function update() {
+    function calculate() {
+        const outAtk = parseInt(outS.value);
         const L = parseInt(lS.value);
         const N = parseInt(nS.value);
-        const bonus = parseInt(bS.value) / 100;
-        
-        // --- 核心计算 ---
-        const atkOut = 30;
-        const atkInit = 122;
-        // 局内攻击力 = 局外 + (初始 - 局外) * (1 + 增伤)
-        const atkIn = atkOut + (atkInit - atkOut) * (1 + bonus);
-        // 暴击伤害 = 2 * 局内 - 局外
-        const crit = 2 * atkIn - atkOut;
-        
-        const mHP = getHP(L);
-        const totalMHP = mHP * N;
-        const timeDie = 100 / (N * 30);
-        
-        // 判定：单位时间内的输出是否能清掉总血量
-        const isSafe = atkIn >= (totalMHP / timeDie);
+        const initAtk = 122;
+        const diff = initAtk - outAtk;
 
-        // --- 更新 UI ---
+        const inputs = document.querySelectorAll('.slot-input');
+        let currentTotalBonus = 0;
+        let history = [initAtk];
+
+        // 核心拟合逻辑：百分比累加后再带入
+        inputs.forEach(input => {
+            const val = parseFloat(input.value) || 0;
+            currentTotalBonus += val;
+            const stepAtk = outAtk + diff * (1 + currentTotalBonus / 100);
+            history.push(stepAtk);
+        });
+
+        const finalAtk = history[history.length - 1];
+        const critDmg = (2 * finalAtk) - outAtk;
+
+        // UI 更新
+        document.getElementById('outVal').innerText = outAtk;
         document.getElementById('lVal').innerText = L;
         document.getElementById('nVal').innerText = N;
-        document.getElementById('bVal').innerText = (bonus * 100) + "%";
-        document.getElementById('atkIn').innerText = Math.floor(atkIn).toLocaleString();
-        document.getElementById('critDmg').innerText = Math.floor(crit).toLocaleString();
-        document.getElementById('tDie').innerText = timeDie.toFixed(2) + "s";
-        document.getElementById('reqDmg').innerText = Math.ceil(totalMHP).toLocaleString();
+        document.getElementById('atkInRes').innerText = Math.round(finalAtk).toLocaleString();
+        document.getElementById('critRes').innerText = Math.round(critDmg).toLocaleString();
 
-        const badge = document.getElementById('statusBadge');
-        if(isSafe) {
-            badge.innerText = "数值压制：成功存活";
-            badge.className = "status-badge safe";
+        // 生存判定
+        const mHP = getMonsterHP(L);
+        const tDie = 100 / (N * 30);
+        const reqAtk = (mHP * N) / tDie;
+        
+        const sBox = document.getElementById('statusBox');
+        if (finalAtk >= reqAtk) {
+            sBox.className = "status-box pass";
+            sBox.innerText = `✅ 数值达标：可在 ${tDie.toFixed(2)}s 内清场`;
         } else {
-            badge.innerText = "数值崩坏：无法生存";
-            badge.className = "status-badge death";
+            sBox.className = "status-box fail";
+            sBox.innerText = `❌ 火力不足：缺口 ${Math.round(reqAtk - finalAtk).toLocaleString()}`;
         }
 
-        // --- 更新图表 ---
-        const myAtkData = Array(31).fill(atkIn);
-        const reqAtkData = Array.from({length: 31}, (_, i) => (getHP(i * 10) * N) / timeDie);
-        
-        chart.data.datasets[0].data = reqAtkData;
-        chart.data.datasets[1].data = myAtkData;
+        // 图表更新
+        chart.data.datasets[0].data = history;
         chart.update('none');
     }
 
-    [lS, nS, bS].forEach(el => el.addEventListener('input', update));
-    update();
+    // 事件监听
+    [outS, lS, nS].forEach(el => el.addEventListener('input', calculate));
+    document.addEventListener('input', (e) => {
+        if(e.target.classList.contains('slot-input')) calculate();
+    });
+
+    // 初始计算一次
+    calculate();
 </script>
 
 </body>
